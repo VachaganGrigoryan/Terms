@@ -27,7 +27,7 @@ base=https://github.com/$repo/releases/download/$tag
 
 cat <<EOF
 class Terms < Formula
-  desc "Independently implemented terminal toolkit: ls, search, json, pick, jump, history, git"
+  desc "Terminal toolkit: ls, search, json, pick, jump, history, git"
   homepage "https://github.com/$repo"
   version "$version"
   license "MIT"
