@@ -39,7 +39,7 @@ Reject extra/missing fields, invalid hex/IDs, embedded NUL in shell data, unsupp
 
 ## Explicit shell activation
 
-Source `shell/history.zsh` or `shell/history.bash`, set TERMS_BIN to the trusted absolute executable if necessary, then call `terms_history_enable`. Sourcing only defines functions. Automatic capture requires interactive Zsh or Bash4.4+. Bash3.2 refuses with exit2 and leaves history CLI usable.
+Source `shell/history.zsh` or `shell/history.bash`, or run `eval "$(terms init zsh|bash --history)"` (which prints the same adapters embedded in the binary), set TERMS_BIN to the trusted absolute executable if necessary, then call `terms_history_enable`. Sourcing or `terms init --history` only defines functions; capture is never enabled for the user. Automatic capture requires interactive Zsh or Bash4.4+. Bash3.2 refuses with exit2 and leaves history CLI usable.
 
 Activation registers a session, disables native history-file saving by unsetting HISTFILE and installs idempotent hooks. Native persistence stays disabled after `terms_history_disable` until that shell exits: restoring HISTFILE could replay encrypted-session commands from memory into plaintext. Existing files are neither imported nor deleted. Users manually overriding HISTFILE or explicitly writing shell history are outside this protection.
 

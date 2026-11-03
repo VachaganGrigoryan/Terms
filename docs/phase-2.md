@@ -20,6 +20,7 @@ This is plaintext activity data. Explicit tracking consent is required. Exclusio
 
 Source `shell/terms.bash` or `shell/terms.zsh` explicitly. Set `TERMS_BIN` to the absolute trusted executable if it is not discoverable. Sourcing only defines functions; it does not activate tracking or edit startup files.
 
+- `eval "$(terms init zsh|bash [--track])"` prints the adapter embedded in the binary followed by `terms_enable` (or `terms_enable --track`); sourcing `shell/terms.{zsh,bash}` and calling `terms_enable` remains equivalent. `terms init` only prints text and edits no file.
 - `terms_enable` registers `tj`, `tji` and completion. It also defines short names `t`, `tl`, `ts`, `tq`, `tp`, `th` and `tg` for `terms` and its `ls`, `search`, `json`, `pick`, `history` and `git` commands; an occupied name is skipped with a warning, and `terms_disable` removes only what Terms installed. `terms_enable --track` additionally consents to visited-path recording; records initial and changed directories.
 - `tj` uses an existing directory directly or a ranked query; no arguments goes home. `tji` always selects interactively.
 - `terms_bindings_enable` separately requests Alt-C directory change and, where supported, Ctrl-T editable file insertion. Occupied keys are refused. Users may explicitly unbind chosen keys first; Terms does not erase existing bindings automatically.

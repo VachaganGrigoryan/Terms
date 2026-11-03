@@ -27,7 +27,7 @@ Independent crypto/unsafe review found repair reachability, import routing, Argo
 
 - Full cryptographic dependency/advisory/source audit, independent known-answer vectors, crash injection and randomness-failure injection remain incomplete. An inventory is not an audit.
 - Linux, declared Rust1.85, modern Bash4.4+, real terminal passphrase lifecycle and Readline/ZLE recall remain unverified. Bash3.2 automatic capture deliberately refuses.
-- Actual background-agent socket integration is blocked by sandbox EPERM. Keyed operations pass in state tests, not an end-to-end unlocked daemon session.
+- Actual background-agent socket integration is blocked by sandbox EPERM. Keyed operations pass in state tests, not an end-to-end unlocked daemon session. Update 2026-11-04: on Linux (Debian 13, aarch64, zsh 5.9, in Docker) a real PTY session recorded for `docs/img/history.gif` completed `history init`, `history unlock` (agent started), `terms_history_enable`, then `history search` returning the captured commands. That is a manual observation from a recording, not an automated test, and the macOS agent and modern Bash remain unobserved. The gate stays open.
 - Passphrase entry reuses the signal-aware raw-terminal alternate-screen guard rather than a dedicated echo-only prompt. It does not echo the passphrase; prompt UX needs real-terminal validation.
 - Import commits valid lines individually; partial imports on later errors are documented. Export requires explicit plaintext target and creates a new private file.
 - Agent serializes one client at a time (below the planned maximum); absolute frame deadlines bound client stalls. Queue/load stress validation is incomplete.

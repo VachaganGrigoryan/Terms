@@ -1,21 +1,90 @@
 # Terms
 
-An independently implemented Rust terminal toolkit for macOS and Linux. Implemented commands: `ls`, `help`, `search`, `json`, `pick`, `jump`, `history`, and `git`. Terms supports documented subsets of the original tools, rather than drop-in compatibility.
+An independently implemented terminal toolkit for macOS and Linux: one small binary with `ls`, `search`, `json`, `pick`, `jump`, an encrypted `history`, a hardened `git`, and offline `help`. Terms supports documented subsets of the original tools, rather than drop-in compatibility.
 
-## Build and setup
+![Enable the short names with eval "$(terms init zsh)"](docs/img/init.gif)
 
-From the project directory:
+## Install
+
+Prebuilt binaries cover macOS and Linux on Apple Silicon/ARM64 and x86_64. The Linux builds are static, so they run on any distribution, including Alpine.
+
+**Homebrew** (macOS and Linux)
 
 ```sh
-cargo build --release --locked --offline
-export PATH="$PWD/target/release:$PATH"
-terms --help
-terms --version
+brew install VachaganGrigoryan/tap/terms
 ```
 
-Offline builds require the pinned crypto dependencies to be cached. Setup above affects only the current shell; it does not install anything or modify startup files. Use `terms COMMAND --help` for command syntax. Pass option values separately (`--sort size`); combined short flags such as `-ln` are not supported. Use `--` before operands starting with `-`, where documented.
+**Install script**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/VachaganGrigoryan/Terms/main/install.sh | sh
+```
+
+The script puts the `terms` binary in `~/.local/bin` (`TERMS_INSTALL_DIR` changes that, `TERMS_VERSION=v0.1.0` pins a version) after checking the download against the release's `SHA256SUMS`. It writes nothing else and never edits your shell startup files. The checksum catches a corrupted or altered download, not a compromised release, because both come from the same place. If you would rather read it first: `curl -fsSLO https://raw.githubusercontent.com/VachaganGrigoryan/Terms/main/install.sh`, then `sh install.sh`.
+
+**Cargo**
+
+```sh
+cargo install --git https://github.com/VachaganGrigoryan/Terms --locked
+```
+
+**From source**
+
+```sh
+git clone https://github.com/VachaganGrigoryan/Terms && cd Terms
+cargo build --release --locked
+./target/release/terms --version
+```
+
+Requirements: building from source needs Rust 1.85 or newer. `terms git` needs Git 2.34 or newer at `/usr/bin/git`, or pass `--git-bin /absolute/path/to/git`. It was tested with Git 2.34, 2.39, 2.47 and 2.54. If you download an archive in a browser on macOS, Gatekeeper may quarantine it; clear that with `xattr -d com.apple.quarantine terms`. The script and Homebrew are unaffected.
+
+## Shell setup
+
+Terms works without any shell integration. For short command names, directory jumping and optional history capture, add one line to `~/.zshrc` (or `~/.bashrc`):
+
+```sh
+eval "$(terms init zsh)"      # or: eval "$(terms init bash)"
+```
+
+`terms init` only prints the integration; Terms never edits your startup files. It defines these short names, so you can type less:
+
+| Name | Runs | Example |
+|---|---|---|
+| `t` | `terms` | `t help ls` |
+| `tl` | `terms ls` | `tl --long --header` |
+| `ts` | `terms search` | `ts -F TODO src` |
+| `tq` | `terms json` | `tq '.name' data.json` |
+| `tp` | `terms pick` | `ts --files \| tp` |
+| `th` | `terms history` | `th search cargo` |
+| `tg` | `terms git` | `tg status` |
+| `tj`, `tji` | jump and change directory | `tj project` |
+
+A name that is already an alias, function, builtin or command is skipped with a message on stderr and never replaced. `terms_disable` removes only the definitions Terms installed. The names exist only in shells where you ran the line above.
+
+Options: `terms init zsh --track` also records every directory you visit (see [jump](#jump--remember-and-find-directories)), and `terms init zsh --history` defines the history functions, but capture still starts only when you run `terms_history_enable` (see [history](#history--encrypted-command-history)). Bash 3.2, the macOS default, gets the short names and directory jumping; automatic history capture needs Bash 4.4 or newer, and key bindings need an explicit `--replace` there (see [jump](#jump--remember-and-find-directories)).
+
+The sections below use the full `terms` name; every example works with the short names too.
+
+## Uninstall
+
+```sh
+brew uninstall terms          # if you used Homebrew
+rm ~/.local/bin/terms         # if you used the install script
+```
+
+Remove the `eval "$(terms init ...)"` line from your shell startup file. Terms keeps its data under `$XDG_STATE_HOME/terms` (default `~/.local/state/terms`): remembered directories in plaintext, and the encrypted history vault. Delete that directory only if you want them gone.
+
+## Status
+
+Early release (0.1.x). CI builds and tests on macOS and on Linux (Ubuntu latest and 22.04), and with Rust 1.85. Some acceptance gates are still open and listed in the verification reports: independent cryptographic and Git review, history capture on modern Bash, and real-terminal validation of Readline/ZLE recall. The encrypted history format has not been independently audited. See the [roadmap](docs/roadmap.md) and [releasing](docs/releasing.md).
+
+## Using Terms
+
+Use `terms COMMAND --help` for command syntax. Pass option values separately (`--sort size`); combined short flags such as `-ln` are not supported. Use `--` before operands starting with `-`, where documented.
 
 ## ls — list files
+
+![terms ls](docs/img/ls.gif)
 
 ```sh
 terms ls                              # Current directory, one entry per line
@@ -45,6 +114,8 @@ Pages are bundled and work offline. They cover implemented Terms commands and a 
 
 ## search — search files and enumerate paths
 
+![terms search](docs/img/search.gif)
+
 ```sh
 terms search -F 'needle' .                  # Literal recursive search
 terms search -i -n 'error|warning' src       # Regex, ASCII case folding, line numbers
@@ -64,6 +135,8 @@ Regex supports literals, ASCII classes, grouping, alternation, anchors, `.`, `*`
 
 ## json — validate, format, and filter JSON
 
+![terms json](docs/img/json.gif)
+
 ```sh
 printf '{"name":"Ada","active":true}\n' | terms json '.'
 terms json -c '.' data.json                # Compact output
@@ -80,6 +153,8 @@ Input comes from stdin when no files are supplied. Multiple whitespace-separated
 Supported filters include paths/indexes, iteration, pipes, `select` equality/inequality against scalar literals, array/object construction, `map`, and `length`. Arithmetic, modules, variables, updates, and the full jq language are not implemented. Raw strings preserve bytes to pipes/files, but terminal controls are escaped when displayed directly in a terminal. `-` is a literal filename, not a stdin alias.
 
 ## pick — select records interactively
+
+![terms pick](docs/img/pick.gif)
 
 ```sh
 printf 'apple\nbanana\norange\n' | terms pick
@@ -103,6 +178,8 @@ Default matching is fuzzy byte subsequence matching; `--exact` uses substring ma
 
 ## jump — remember and find directories
 
+![tj and tji](docs/img/jump.gif)
+
 Manual recording and queries:
 
 ```sh
@@ -122,19 +199,9 @@ The binary prints paths; shell functions below actually change the parent shell'
 
 Visited paths are **plaintext activity data**, stored in owner-only files under `$XDG_STATE_HOME/terms`, or `$HOME/.local/state/terms` when unset. This store is separate from encrypted command history.
 
-### Activate navigation in the current shell
+### Change directories from your shell
 
-From the project directory, select the adapter for your shell:
-
-```sh
-export TERMS_BIN="$PWD/target/release/terms"
-source shell/terms.zsh                     # Zsh
-# source shell/terms.bash                  # Bash instead
-terms_enable                              # Functions and completion; no tracking
-# terms_enable --track                    # Explicitly enable automatic visit tracking
-```
-
-Then use:
+With `eval "$(terms init zsh)"` in place (see [Shell setup](#shell-setup)), these functions change the parent shell's directory:
 
 ```sh
 tj project                                # Best remembered match
@@ -144,23 +211,13 @@ tj                                        # Home directory
 terms_disable                             # Disable navigation integration
 ```
 
-`terms_enable` also defines short names for the other commands, so you can type less:
-
-| Name | Runs | Example |
-|---|---|---|
-| `t` | `terms` | `t help ls` |
-| `tl` | `terms ls` | `tl --long --header` |
-| `ts` | `terms search` | `ts -F TODO src` |
-| `tq` | `terms json` | `tq '.name' data.json` |
-| `tp` | `terms pick` | `ls \| tp` |
-| `th` | `terms history` | `th search cargo` |
-| `tg` | `terms git` | `tg status` |
-
-A name that is already an alias, function, builtin or command is skipped with a message on stderr and never replaced. `terms_disable` removes only the definitions Terms installed. The names exist only in the shell where you ran `terms_enable`.
+Tracking is off by default. `eval "$(terms init zsh --track)"` (or `terms_enable --track` in a shell where the integration is already loaded) explicitly consents to recording the initial and every changed directory.
 
 Optional `terms_bindings_enable` requests Alt-C for interactive directory changes and, where supported, Ctrl-T for editable file-path insertion. Occupied bindings are refused. On Bash 3.2 ordinary binding activation is refused because shell bindings cannot be inspected reliably; explicit `terms_bindings_enable --replace` can replace Alt-C, but cannot restore the previous binding automatically. Disable leaves its guarded handler dormant. Navigation functions do not require these bindings.
 
 ## history — encrypted command history
+
+![terms history](docs/img/history.gif)
 
 History implementation exists, but acceptance is still open. See [verification status](docs/phase-3-verification.md) for live-agent, real-terminal, modern Bash/Linux, and dependency-review gaps. Git and encrypted-history tools from other projects are not runtime dependencies.
 
@@ -178,12 +235,10 @@ Initialization does not enable capture or import existing history. Passphrases a
 
 ### Enable shell capture explicitly
 
-From the project directory:
+Load the history functions, then switch capture on yourself:
 
 ```sh
-export TERMS_BIN="$PWD/target/release/terms"
-source shell/history.zsh                   # Zsh
-# source shell/history.bash               # Bash 4.4+ instead
+eval "$(terms init zsh --history)"         # or: terms init bash --history (Bash 4.4+ for capture)
 terms_history_enable
 ```
 
@@ -244,6 +299,8 @@ Export intentionally creates a **plaintext** owner-only file and refuses to over
 
 ## git — inspect, stage and commit with system Git
 
+![terms git](docs/img/git.gif)
+
 ```sh
 terms git status                          # Escaped status
 terms git status --null                   # Raw NUL-delimited porcelain v2
@@ -277,6 +334,6 @@ cargo test --locked --offline
 cargo build --release --locked --offline
 ```
 
-Rust 1.85 is declared as the minimum; only compilers/platforms recorded in verification reports are tested. Third-party dependencies are limited to the approved crypto crates and their required dependencies. No automatic installation, startup-file changes, cloud client, or history migration occurs.
+Rust 1.85 is the declared minimum and is built and tested in CI. The platforms and tool versions that were actually exercised are recorded in the verification reports. Third-party dependencies are limited to the approved crypto crates and their required dependencies. Terms never installs anything on its own, edits startup files, talks to the network, or migrates history; the install script and Homebrew only place the binary.
 
 See the [roadmap](docs/roadmap.md), [research](docs/research.md), and verification reports for [Phase 1](docs/phase-1-verification.md), [Phase 2](docs/phase-2-verification.md), [Phase 3](docs/phase-3-verification.md), and [Phase 4](docs/phase-4-verification.md).
