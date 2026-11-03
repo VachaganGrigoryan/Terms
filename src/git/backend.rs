@@ -1,6 +1,6 @@
 //! Bounded system-Git boundary. Preflight detects supported hazards; it is not a sandbox.
 use std::{
-    ffi::{OsStr, OsString},
+    ffi::OsString,
     fs,
     io::{Read, Write},
     os::unix::{ffi::OsStrExt, process::CommandExt},
@@ -364,7 +364,61 @@ impl Git {
                 actual.insert(i + 1, "--no-show-signature".into());
             }
         }
+        if matches!(
+            cmd,
+            "status" | "diff" | "add" | "restore" | "rm" | "update-index" | "commit"
+        ) {
+            // These compare or stage worktree content, which runs repository-defined
+            // clean/smudge commands. Blank every configured filter before Git starts.
+            use std::os::unix::ffi::OsStringExt;
+            let mut overrides = Vec::new();
+            for name in self.filter_names()? {
+                for setting in ["clean=", "smudge=", "process=", "required=false"] {
+                    let mut key = b"filter.".to_vec();
+                    key.extend(&name);
+                    key.push(b'.');
+                    key.extend(setting.as_bytes());
+                    overrides.push(OsString::from("-c"));
+                    overrides.push(OsString::from_vec(key));
+                }
+            }
+            actual.splice(0..0, overrides);
+        }
         invoke(&self.executable, &self.root, &actual, input, false, env)
+    }
+    /// Distinct `<name>` parts of every `filter.<name>.<var>` key in the effective config.
+    fn filter_names(&self) -> Result<Vec<Vec<u8>>, String> {
+        let keys = match self.raw(
+            &args(&[
+                "config",
+                "--includes",
+                "--null",
+                "--name-only",
+                "--get-regexp",
+                "^filter\\.",
+            ]),
+            b"",
+        ) {
+            Ok(v) => v,
+            Err(e) if e.starts_with("Git exited 1:") => return Ok(Vec::new()),
+            Err(e) => return Err(e),
+        };
+        let mut names: Vec<Vec<u8>> = Vec::new();
+        for key in keys.split(|b| *b == 0).filter(|k| !k.is_empty()) {
+            let rest = &key[b"filter.".len()..];
+            let Some(dot) = rest.iter().rposition(|b| *b == b'.') else {
+                continue;
+            };
+            let name = &rest[..dot];
+            // `-c name=value` splits at the first '=', so such a name cannot be blanked.
+            if name.contains(&b'=') {
+                return Err("unsupported Git filter name".into());
+            }
+            if !names.iter().any(|n| n == name) {
+                names.push(name.to_vec());
+            }
+        }
+        Ok(names)
     }
     fn config(&self, key: &str) -> Result<Option<Vec<u8>>, String> {
         match self.raw(&args(&["config", "--includes", "--get", key]), b"") {
@@ -557,9 +611,8 @@ impl Git {
         } else {
             self.root.join(index)
         };
-        if let Ok(mut f) = fs::File::open(index) {
-            f.by_ref()
-                .take((LIMIT + 1) as u64)
+        if let Ok(f) = fs::File::open(index) {
+            f.take((LIMIT + 1) as u64)
                 .read_to_end(&mut out)
                 .map_err(|e| e.to_string())?;
         }
@@ -573,9 +626,8 @@ impl Git {
                         .as_bytes(),
                 ),
                 Ok(m) if m.is_file() => {
-                    let mut f = fs::File::open(path).map_err(|e| e.to_string())?;
-                    f.by_ref()
-                        .take((LIMIT + 1) as u64)
+                    let f = fs::File::open(path).map_err(|e| e.to_string())?;
+                    f.take((LIMIT + 1) as u64)
                         .read_to_end(&mut out)
                         .map_err(|e| e.to_string())?;
                 }

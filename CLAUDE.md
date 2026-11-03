@@ -3,7 +3,7 @@
 Rust (edition 2024, MSRV 1.85) single binary `terms`: an independently implemented terminal toolkit for macOS and Linux. Subcommands: `ls`, `help`, `search`, `json`, `pick`, `jump`, `history`, `git`. Each is a documented *subset* of an upstream tool; do not promise drop-in compatibility. Do not copy upstream code or help text.
 
 ## Source of truth
-- `docs/phase-N.md` contracts win over README and `docs/roadmap.md`. Both of those are partly stale: README says Git is not implemented, and the roadmap still says the workspace is empty. `src/git/` and `docs/phase-4.md` are implemented.
+- `docs/phase-N.md` contracts win over `docs/roadmap.md`, whose "Current baseline" paragraph (empty workspace) is stale.
 - Verification reports in `docs/phase-N-verification.md` record real evidence and open gaps.
 
 ## Layout
@@ -23,7 +23,7 @@ python3 tests/pty_selector.py && python3 tests/store_fifo.py
 ```
 Use `--locked --offline`. Do not add dependencies without the review process in the phase docs.
 
-**Current state (checked 2026-11-04):** the Rust build is broken. `cargo build` fails with two E0034 "multiple applicable items" errors on `by_ref` in `src/git/backend.rs:561` and `:577`, plus an unused `OsStr` import at `src/git/backend.rs:3`. `cargo fmt --check` reports diffs in `src/git/browser.rs`, `src/git/mod.rs`, `src/git/signing.rs`, and `src/lib.rs`. Clippy has six errors in total (two are the E0034 above; the rest are unlocated `else if` lints). Until those are fixed, `cargo test` and clippy cannot give a result. The four Python harnesses pass.
+The whole gate passed on 2026-11-04 (macOS arm64, Rust 1.99.1, Apple Git 2.54.0); see `docs/phase-4-verification.md`. `tests/git_sentinel.rs` builds hostile repositories and fails if any repository-controlled helper runs; it skips when `/usr/bin/git` is missing. Any new `terms git` operation that touches worktree content, config, or hooks needs a sentinel test before it ships.
 
 ## Hard constraints
 - Std-only, apart from the pinned crypto crates `argon2`, `chacha20poly1305`, `getrandom`, and `zeroize`. They use exact `=` versions and must build offline.

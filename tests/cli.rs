@@ -16,7 +16,7 @@ fn public_cli_contract() {
             "0.1.0"
         }));
     }
-    for arg in ["jump", "pick", "history", "git", "--unknown", "unknown"] {
+    for arg in ["jump", "pick", "history", "--unknown", "unknown"] {
         let result = Command::new(env!("CARGO_BIN_EXE_terms"))
             .arg(arg)
             .output()
@@ -25,6 +25,18 @@ fn public_cli_contract() {
         assert!(result.stdout.is_empty());
         assert!(!result.stderr.is_empty());
     }
+    // Phase 4 contract: bare `terms git` prints usage and succeeds.
+    let result = Command::new(env!("CARGO_BIN_EXE_terms"))
+        .arg("git")
+        .output()
+        .unwrap();
+    assert_eq!(result.status.code(), Some(0));
+    assert!(result.stderr.is_empty());
+    assert!(
+        String::from_utf8(result.stdout)
+            .unwrap()
+            .starts_with("Usage: terms git")
+    );
 }
 
 #[test]

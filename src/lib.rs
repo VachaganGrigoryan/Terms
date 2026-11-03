@@ -1,8 +1,8 @@
 //! Streaming command orchestration for Terms.
 use std::ffi::OsString;
 use std::io::{Read, Write};
-mod help;
 mod git;
+mod help;
 mod history;
 mod json;
 mod jump;
@@ -49,7 +49,9 @@ pub fn execute(
             }
             "json" => "json [-c] [-r] [--] FILTER [FILE...]",
             "pick" => "pick [--exact] [--multi] [--read0] [--print0] [--query TEXT] [--hex]",
-            "git" => "git [--git-bin ABS] [-C PATH] status|diff|log|show|branches|stashes|identity|browse|stage|unstage|commit",
+            "git" => {
+                "git [--git-bin ABS] [-C PATH] status|diff|log|show|branches|stashes|identity|browse|stage|unstage|commit"
+            }
             "history" => {
                 "history init|unlock|lock|status|agent|search|pick|import|export|delete|clear|retention|exclude|repair"
             }

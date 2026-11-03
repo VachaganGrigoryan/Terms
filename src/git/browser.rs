@@ -1,9 +1,134 @@
 //! Read-only repository browser.
-use super::{args,backend::Git,escape,inspect};
-fn detail(mut fetch:impl FnMut()->Result<Vec<u8>,String>)->Result<(),String>{let mut data=fetch()?;let mut offset=0;let mut terminal=crate::native::Terminal::open()?;loop{let(rows,cols)=terminal.dimensions();let text=escape(&data);let lines:Vec<_>=text.lines().collect();offset=offset.min(lines.len().saturating_sub(1));let shown=lines.iter().skip(offset).take(rows.saturating_sub(2)).map(|l|&l[..l.len().min(cols.saturating_sub(1))]).collect::<Vec<_>>().join("\r\n");terminal.write(format!("\x1b[H\x1b[2J{shown}\r\n[r refresh, Ctrl-N/P scroll, Enter/Escape back]").as_bytes())?;let(keys,_,cancel)=terminal.wait(false,false)?;if cancel{return Ok(())}if keys{for b in terminal.key()?{match b{b'r'=>{data=fetch()?;},14=>offset=offset.saturating_add(1),16=>offset=offset.saturating_sub(1),13|10|27|3=>return Ok(()),_=>{}}}}}}
-pub fn execute(g:&Git)->Result<u8,String>{loop{let options=["Status","File diffs","History","Branches","Stashes"].iter().map(|s|s.as_bytes().to_vec()).collect();let Some(selected)=crate::pick::choose(options,"",false,true)?else{return Ok(130)};let Some(choice)=selected.first()else{return Ok(0)};match choice.as_slice(){
-b"Status"=>detail(||{let raw=inspect(g,"status",&[])?;Ok(raw.split(|&b|b==0).flat_map(|x|[x,b"\n"].concat()).collect())})?,
-b"File diffs"=>{let raw=g.run(&args(&["diff","--name-only","-z","--no-ext-diff","--no-textconv"]),b"")?;let staged=g.run(&args(&["diff","--cached","--name-only","-z","--no-ext-diff","--no-textconv"]),b"")?;let mut paths:Vec<Vec<u8>>=raw.split(|&b|b==0).chain(staged.split(|&b|b==0)).filter(|p|!p.is_empty()).map(Vec::from).collect();paths.sort();paths.dedup();if let Some(p)=crate::pick::choose(paths,"",false,true)?.and_then(|s|s.into_iter().next()){use std::os::unix::ffi::OsStringExt;let p=std::ffi::OsString::from_vec(p);detail(||{let mut a=args(&["--"]);a.push(p.clone());let mut b=inspect(g,"diff",&a)?;let mut a=args(&["--cached","--"]);a.push(p.clone());b.extend_from_slice(b"\n--- Staged ---\n");b.extend(inspect(g,"diff",&a)?);Ok(b)})?}},
-b"History"=>{let log=inspect(g,"log",&[])?;let choices=log.split(|&b|b==b'\n').filter(|p|!p.is_empty()).map(Vec::from).collect();if let Some(record)=crate::pick::choose(choices,"",false,true)?.and_then(|s|s.into_iter().next()){use std::os::unix::ffi::OsStringExt;let id=std::ffi::OsString::from_vec(record.split(|&b|b==b'\t').next().ok_or("missing commit ID")?.to_vec());detail(||inspect(g,"show",std::slice::from_ref(&id)))?}},
-b"Branches"=>detail(||inspect(g,"branches",&[]))?,_=>detail(||inspect(g,"stashes",&[]))?}}
+use super::{args, backend::Git, escape, inspect};
+fn detail(mut fetch: impl FnMut() -> Result<Vec<u8>, String>) -> Result<(), String> {
+    let mut data = fetch()?;
+    let mut offset = 0;
+    let mut terminal = crate::native::Terminal::open()?;
+    loop {
+        let (rows, cols) = terminal.dimensions();
+        let text = escape(&data);
+        let lines: Vec<_> = text.lines().collect();
+        offset = offset.min(lines.len().saturating_sub(1));
+        let shown = lines
+            .iter()
+            .skip(offset)
+            .take(rows.saturating_sub(2))
+            .map(|l| &l[..l.len().min(cols.saturating_sub(1))])
+            .collect::<Vec<_>>()
+            .join("\r\n");
+        terminal.write(
+            format!("\x1b[H\x1b[2J{shown}\r\n[r refresh, Ctrl-N/P scroll, Enter/Escape back]")
+                .as_bytes(),
+        )?;
+        let (keys, _, cancel) = terminal.wait(false, false)?;
+        if cancel {
+            return Ok(());
+        }
+        if keys {
+            for b in terminal.key()? {
+                match b {
+                    b'r' => {
+                        data = fetch()?;
+                    }
+                    14 => offset = offset.saturating_add(1),
+                    16 => offset = offset.saturating_sub(1),
+                    13 | 10 | 27 | 3 => return Ok(()),
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+pub fn execute(g: &Git) -> Result<u8, String> {
+    loop {
+        let options = ["Status", "File diffs", "History", "Branches", "Stashes"]
+            .iter()
+            .map(|s| s.as_bytes().to_vec())
+            .collect();
+        let Some(selected) = crate::pick::choose(options, "", false, true)? else {
+            return Ok(130);
+        };
+        let Some(choice) = selected.first() else {
+            return Ok(0);
+        };
+        match choice.as_slice() {
+            b"Status" => detail(|| {
+                let raw = inspect(g, "status", &[])?;
+                Ok(raw
+                    .split(|&b| b == 0)
+                    .flat_map(|x| [x, b"\n"].concat())
+                    .collect())
+            })?,
+            b"File diffs" => {
+                let raw = g.run(
+                    &args(&[
+                        "diff",
+                        "--name-only",
+                        "-z",
+                        "--no-ext-diff",
+                        "--no-textconv",
+                    ]),
+                    b"",
+                )?;
+                let staged = g.run(
+                    &args(&[
+                        "diff",
+                        "--cached",
+                        "--name-only",
+                        "-z",
+                        "--no-ext-diff",
+                        "--no-textconv",
+                    ]),
+                    b"",
+                )?;
+                let mut paths: Vec<Vec<u8>> = raw
+                    .split(|&b| b == 0)
+                    .chain(staged.split(|&b| b == 0))
+                    .filter(|p| !p.is_empty())
+                    .map(Vec::from)
+                    .collect();
+                paths.sort();
+                paths.dedup();
+                if let Some(p) =
+                    crate::pick::choose(paths, "", false, true)?.and_then(|s| s.into_iter().next())
+                {
+                    use std::os::unix::ffi::OsStringExt;
+                    let p = std::ffi::OsString::from_vec(p);
+                    detail(|| {
+                        let mut a = args(&["--"]);
+                        a.push(p.clone());
+                        let mut b = inspect(g, "diff", &a)?;
+                        let mut a = args(&["--cached", "--"]);
+                        a.push(p.clone());
+                        b.extend_from_slice(b"\n--- Staged ---\n");
+                        b.extend(inspect(g, "diff", &a)?);
+                        Ok(b)
+                    })?
+                }
+            }
+            b"History" => {
+                let log = inspect(g, "log", &[])?;
+                let choices = log
+                    .split(|&b| b == b'\n')
+                    .filter(|p| !p.is_empty())
+                    .map(Vec::from)
+                    .collect();
+                if let Some(record) = crate::pick::choose(choices, "", false, true)?
+                    .and_then(|s| s.into_iter().next())
+                {
+                    use std::os::unix::ffi::OsStringExt;
+                    let id = std::ffi::OsString::from_vec(
+                        record
+                            .split(|&b| b == b'\t')
+                            .next()
+                            .ok_or("missing commit ID")?
+                            .to_vec(),
+                    );
+                    detail(|| inspect(g, "show", std::slice::from_ref(&id)))?
+                }
+            }
+            b"Branches" => detail(|| inspect(g, "branches", &[]))?,
+            _ => detail(|| inspect(g, "stashes", &[]))?,
+        }
+    }
 }

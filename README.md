@@ -1,6 +1,6 @@
 # Terms
 
-An independently implemented Rust terminal toolkit for macOS and Linux. Implemented commands: `ls`, `help`, `search`, `json`, `pick`, `jump`, and `history`. Git integration is not implemented. Terms supports documented subsets of the original tools, rather than drop-in compatibility.
+An independently implemented Rust terminal toolkit for macOS and Linux. Implemented commands: `ls`, `help`, `search`, `json`, `pick`, `jump`, `history`, and `git`. Terms supports documented subsets of the original tools, rather than drop-in compatibility.
 
 ## Build and setup
 
@@ -228,6 +228,30 @@ Export intentionally creates a **plaintext** owner-only file and refuses to over
 
 `terms history repair --truncate-incomplete-tail` explicitly authenticates the valid prefix and removes only an incomplete final frame. It does not bypass authentication failures or silently discard complete corrupted frames. Back up the encrypted vault before deliberate recovery operations. At-rest encryption does not protect an unlocked session from root or same-user compromise, or guarantee detection of whole-vault rollback.
 
+## git — inspect, stage and commit with system Git
+
+```sh
+terms git status                          # Escaped status
+terms git status --null                   # Raw NUL-delimited porcelain v2
+terms git diff --staged -- src/lib.rs     # Diff, optionally staged or limited to files
+terms git log --limit 20                  # 1 to 1000, default 50
+terms git show COMMIT
+terms git branches
+terms git stashes
+terms git identity                        # Effective author/committer and config origins
+terms git browse                          # Read-only interactive browser
+terms git stage a.txt                     # Preview only
+terms git stage --apply a.txt
+terms git unstage --apply a.txt
+terms git commit -m 'message'             # Preview only
+terms git commit --apply -m 'message'
+terms git -C /path/to/repo status         # Operate on another repository
+```
+
+Terms runs `/usr/bin/git` (or the absolute path given to `--git-bin`) with a cleared environment. Hooks, pagers, editors, fsmonitor, external diff, textconv, repository-defined filters, submodule recursion, maintenance and network access are disabled. Output escapes terminal controls.
+
+Stage, unstage and commit show a preview by default. `--apply` rechecks the repository first and refuses if it changed. They take explicit files only (no directories), and refuse sparse checkouts, partial clones, unmerged or in-progress states, and files with a Git filter (including LFS). Commit needs `-m` or `--message-file`, commits exactly the staged index, and exits 1 when nothing is staged. Signing follows your configured SSH or OpenPGP settings; signing programs are trusted only from user, global or system configuration, never from the repository. Checkout, remotes, stash writes, rebase, conflict resolution, amend and partial staging are not implemented. See the [Phase 4 contract](docs/phase-4.md).
+
 ## Exit statuses and verification
 
 Generally, `0` means success, `1` means no results, `2` means usage/data/I/O/resource failure, and `130` means interactive cancellation. Commands may have emitted earlier valid output before a later error. Human-oriented output escapes untrusted terminal content; NUL/hex modes are intended for exact transport.
@@ -241,4 +265,4 @@ cargo build --release --locked --offline
 
 Rust 1.85 is declared as the minimum; only compilers/platforms recorded in verification reports are tested. Third-party dependencies are limited to the approved crypto crates and their required dependencies. No automatic installation, startup-file changes, cloud client, or history migration occurs.
 
-See the [roadmap](docs/roadmap.md), [research](docs/research.md), and verification reports for [Phase 1](docs/phase-1-verification.md), [Phase 2](docs/phase-2-verification.md), and [Phase 3](docs/phase-3-verification.md).
+See the [roadmap](docs/roadmap.md), [research](docs/research.md), and verification reports for [Phase 1](docs/phase-1-verification.md), [Phase 2](docs/phase-2-verification.md), [Phase 3](docs/phase-3-verification.md), and [Phase 4](docs/phase-4-verification.md).
