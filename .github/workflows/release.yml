@@ -96,6 +96,8 @@ jobs:
   assemble:
     name: checksums and formula
     needs: build
+    # An explicit status check, or the skipped verify/ci ancestors of a dry run would skip this job too.
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
