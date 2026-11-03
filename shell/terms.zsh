@@ -78,6 +78,18 @@ terms_enable() {
         (( ${+functions[compdef]} )) && compdef _terms_complete tj tji
         _TERMS_TJ_DEF=$functions[tj]
         _TERMS_TJI_DEF=$functions[tji]
+        # Short names for the other commands. An occupied name is skipped, never replaced.
+        local name sub
+        typeset -gA _TERMS_SHORT
+        _TERMS_SHORT=()
+        for name sub in t '' tl ls ts search tq json tp pick th history tg git; do
+            if (( ${+aliases[$name]} || ${+functions[$name]} || ${+builtins[$name]} || ${+reswords[(r)$name]} || ${+commands[$name]} )); then
+                print -u2 "terms: $name already exists; not defined"
+                continue
+            fi
+            functions[$name]="\"\$_TERMS_BIN\" $sub \"\$@\""
+            _TERMS_SHORT[$name]=$functions[$name]
+        done
         _TERMS_ENABLED=1
     fi
     if [[ $requested = --track && ${_TERMS_TRACKING:-0} != 1 ]]; then
@@ -111,5 +123,10 @@ terms_disable() {
     fi
     [[ ${functions[tj]-} != ${_TERMS_TJ_DEF-} ]] || unfunction tj
     [[ ${functions[tji]-} != ${_TERMS_TJI_DEF-} ]] || unfunction tji
+    local name
+    for name in ${(k)_TERMS_SHORT}; do
+        [[ ${functions[$name]-} != ${_TERMS_SHORT[$name]} ]] || unfunction $name
+    done
+    unset _TERMS_SHORT
     unset _TERMS_ENABLED _TERMS_TRACKING _TERMS_LAST_PWD _TERMS_BINDINGS
 }

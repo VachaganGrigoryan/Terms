@@ -84,6 +84,20 @@ terms_enable() {
         complete -o filenames -F _terms_complete tj tji
         _TERMS_TJ_DEF=$(declare -f tj)
         _TERMS_TJI_DEF=$(declare -f tji)
+        # Short names for the other commands. An occupied name is skipped, never replaced.
+        # The eval input is this fixed table only; Bash 3.2 has no associative arrays.
+        local name sub spec
+        _TERMS_SHORT=
+        for spec in t: tl:ls ts:search tq:json tp:pick th:history tg:git; do
+            name=${spec%%:*}; sub=${spec#*:}
+            if [ -n "$(type -t "$name")" ]; then
+                printf '%s\n' "terms: $name already exists; not defined" >&2
+                continue
+            fi
+            eval "$name() { \"\$_TERMS_BIN\" $sub \"\$@\"; }"
+            printf -v "_TERMS_DEF_$name" '%s' "$(declare -f "$name")"
+            _TERMS_SHORT="$_TERMS_SHORT $name"
+        done
         _TERMS_ENABLED=1
     fi
     if [ "$requested" = --track ] && [ "${_TERMS_TRACKING:-0}" != 1 ]; then
@@ -131,5 +145,12 @@ terms_disable() {
     done
     [ "$(declare -f tj)" != "${_TERMS_TJ_DEF-}" ] || unset -f tj
     [ "$(declare -f tji)" != "${_TERMS_TJI_DEF-}" ] || unset -f tji
+    local def
+    for name in ${_TERMS_SHORT-}; do
+        def=_TERMS_DEF_$name
+        [ "$(declare -f "$name")" != "${!def}" ] || unset -f "$name"
+        unset "$def"
+    done
+    unset _TERMS_SHORT
     unset _TERMS_ENABLED _TERMS_TRACKING _TERMS_LAST_PWD _TERMS_BINDINGS _TERMS_INSERT_BINDING
 }

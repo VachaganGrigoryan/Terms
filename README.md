@@ -144,6 +144,20 @@ tj                                        # Home directory
 terms_disable                             # Disable navigation integration
 ```
 
+`terms_enable` also defines short names for the other commands, so you can type less:
+
+| Name | Runs | Example |
+|---|---|---|
+| `t` | `terms` | `t help ls` |
+| `tl` | `terms ls` | `tl --long --header` |
+| `ts` | `terms search` | `ts -F TODO src` |
+| `tq` | `terms json` | `tq '.name' data.json` |
+| `tp` | `terms pick` | `ls \| tp` |
+| `th` | `terms history` | `th search cargo` |
+| `tg` | `terms git` | `tg status` |
+
+A name that is already an alias, function, builtin or command is skipped with a message on stderr and never replaced. `terms_disable` removes only the definitions Terms installed. The names exist only in the shell where you ran `terms_enable`.
+
 Optional `terms_bindings_enable` requests Alt-C for interactive directory changes and, where supported, Ctrl-T for editable file-path insertion. Occupied bindings are refused. On Bash 3.2 ordinary binding activation is refused because shell bindings cannot be inspected reliably; explicit `terms_bindings_enable --replace` can replace Alt-C, but cannot restore the previous binding automatically. Disable leaves its guarded handler dormant. Navigation functions do not require these bindings.
 
 ## history — encrypted command history
