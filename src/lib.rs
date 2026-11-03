@@ -4,6 +4,7 @@ use std::io::{Read, Write};
 mod git;
 mod help;
 mod history;
+mod init;
 mod json;
 mod jump;
 mod listing;
@@ -26,7 +27,7 @@ pub fn execute(
     if args.is_empty() || (args.len() == 1 && (args[0] == "--help" || args[0] == "-h")) {
         write(
             out,
-            "Terms — independent terminal toolkit\nUsage: terms <command> [options]\nCommands: ls, help, search, json, pick, jump, history, git\nUse terms <command> --help for usage\n",
+            "Terms — independent terminal toolkit\nUsage: terms <command> [options]\nCommands: ls, help, search, json, pick, jump, history, git, init\nUse terms <command> --help for usage\n",
         )?;
         return Ok(0);
     }
@@ -56,6 +57,7 @@ pub fn execute(
                 "history init|unlock|lock|status|agent|search|pick|import|export|delete|clear|retention|exclude|repair"
             }
             "jump" => "jump add|remove|clear|list|query|exclude [options] [PATH|TERM...]",
+            "init" => init::USAGE,
             _ => return Err("command unavailable or unknown".into()),
         };
         write(out, usage)?;
@@ -71,6 +73,7 @@ pub fn execute(
         "jump" => jump::execute(rest, out),
         "history" => history::execute(rest, input, out, terminal),
         "git" => git::execute(rest, input, out, terminal),
+        "init" => init::execute(rest, out),
         _ => Err("unknown command or option; use --help".into()),
     }
 }
