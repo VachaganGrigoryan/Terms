@@ -66,6 +66,10 @@ sh scripts/test-formula.sh     # formula generation
 shellcheck install.sh scripts/*.sh docs/demo/*.sh
 ```
 
+## If a job is cancelled before it starts
+
+GitHub's macOS arm64 runners are sometimes capacity-limited. A job can queue for 15 minutes and be cancelled with the annotation "The job was not acquired by Runner of type hosted", with no steps run. That is not a code failure. Use **Re-run failed jobs** (or `gh run rerun RUN_ID --failed`); the jobs that already succeeded are kept, and a tag run continues to the publish step once everything passes.
+
 ## Known limits
 
 - The binaries are not code-signed or notarized. Installing with `curl` or Homebrew avoids macOS quarantine; archives downloaded in a browser need `xattr -d com.apple.quarantine terms`.
