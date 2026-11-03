@@ -1,0 +1,11 @@
+# Phase 4 contract
+
+System Git is the trusted executable; no repository-controlled executable lookup is allowed. No new Rust dependencies. Original roadmap unchanged. CLI accepts `terms git [--git-bin ABS] [-C PATH] OP`. Bare `terms git` prints usage.
+
+Inspection: status (--null emits raw porcelain-v2 NUL records); diff [--staged] [-- PATH...]; log [--limit N] default50 max1000; show COMMIT; branches; stashes; identity; browse. Human content is escaped. Browser is read-only with selector menus, file diff/history details, Ctrl-N/P scrolling and explicit refresh. No checkout/remotes/stash writes/rebase.
+
+Writes stage/unstage require explicit file paths, use root-relative literal NUL path input, reject directory/outside operands. Both default to preview. --apply performs fresh preflight and snapshot checks then executes without another prompt. Unstage changes index only including unborn HEAD. Commit requires -m or --message-file (regular<=1MiB), rejects empty/NUL, commits staged index exactly without amend/auto-staging. Preview includes identity/signing policy and staged diff. No staged files returns1.
+
+Identity follows actual effective Git includes and author/committer overrides; no Terms-wide identity or guessed fallback. Signing supports configured SSH/OpenPGP only; signer programs must originate from user/global/system config, not local/worktree. Configured signing never silently falls back unsigned. Program trust extends to user-chosen signers/agents, but unrelated helpers remain disabled.
+
+Backend owns exact operation argv/environment hardening and unsupported-state rejection. Inspection uses no optional locks, no lazy fetch, no pager/editor/hooks/fsmonitor/externaldiff/textconv/submodule recursion/maintenance. Mutable repository/config preflight is not a sandbox against concurrent malicious writers; snapshot checks detect only observable changes. Source inspection, sentinels, actual signatures, macOS/Linux/PTYS and fresh independent review remain acceptance gates; passing ordinary CLI tests alone is insufficient.

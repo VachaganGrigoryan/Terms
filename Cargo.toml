@@ -1,0 +1,13 @@
+[package]
+name = "terms"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "An independently implemented terminal toolkit"
+license = "MIT"
+
+[dependencies]
+argon2 = { version = "=0.5.3", default-features = false, features = ["alloc", "zeroize"] }
+chacha20poly1305 = { version = "=0.11.0", default-features = false, features = ["alloc", "zeroize"] }
+getrandom = "=0.4.3"
+zeroize = { version = "=1.9.1", features = ["alloc"] }
