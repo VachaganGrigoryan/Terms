@@ -96,7 +96,10 @@ fn invoke(
         }
         c.env(k, v);
     }
-    c.args(["--no-pager", "--no-lazy-fetch", "--literal-pathspecs"]);
+    // The `--no-lazy-fetch` option only exists in Git 2.44+ and older Git rejects it, breaking every
+    // command. GIT_NO_LAZY_FETCH=1 (above) is the same switch where supported and is ignored
+    // elsewhere; protocol.allow=never below blocks any transport, so a lazy fetch fails closed.
+    c.args(["--no-pager", "--literal-pathspecs"]);
     for setting in [
         "core.fsmonitor=false",
         "core.hooksPath=/dev/null",
