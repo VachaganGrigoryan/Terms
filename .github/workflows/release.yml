@@ -1,0 +1,127 @@
+name: Release
+
+# Push a tag such as v0.1.0 (matching Cargo.toml) to publish a release. See docs/releasing.md.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  verify:
+    name: verify tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Tag matches Cargo.toml and is on main
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match Cargo.toml version $version"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::tag $GITHUB_REF_NAME is not on main"
+            exit 1
+          fi
+
+  ci:
+    needs: verify
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    name: build ${{ matrix.target }}
+    needs: ci
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { target: aarch64-apple-darwin, os: macos-latest, test: true }
+          - { target: x86_64-apple-darwin, os: macos-latest, test: false }
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-latest, test: true }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-24.04-arm, test: true }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          rustup target add "${{ matrix.target }}"
+      - name: Build
+        run: cargo build --release --locked --target "${{ matrix.target }}"
+      - name: Test the shipped target
+        if: matrix.test
+        run: cargo test --release --locked --target "${{ matrix.target }}"
+      - name: Smoke test
+        run: |
+          bin="target/${{ matrix.target }}/release/terms"
+          file "$bin"
+          if [ "${{ matrix.target }}" = x86_64-apple-darwin ]; then
+            arch -x86_64 "$bin" --version || echo "Rosetta unavailable; x86_64 binary not executed"
+          else
+            "$bin" --version
+          fi
+      - name: Package
+        env:
+          COPYFILE_DISABLE: "1" # keep macOS tar from adding AppleDouble entries
+        run: |
+          stage=$(mktemp -d)
+          cp "target/${{ matrix.target }}/release/terms" LICENSE README.md "$stage/"
+          (cd "$stage" && tar -czf "$GITHUB_WORKSPACE/terms-${{ matrix.target }}.tar.gz" terms LICENSE README.md)
+          tar -tzf "terms-${{ matrix.target }}.tar.gz"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: terms-${{ matrix.target }}
+          path: terms-${{ matrix.target }}.tar.gz
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: terms-*
+          path: dist
+          merge-multiple: true
+      - name: Checksums and Homebrew formula
+        run: |
+          (cd dist && sha256sum terms-*.tar.gz > SHA256SUMS && cat SHA256SUMS)
+          [ "$(wc -l < dist/SHA256SUMS)" -eq 4 ] || { echo "::error::expected 4 archives"; exit 1; }
+          sh scripts/gen-formula.sh "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY" dist/SHA256SUMS > dist/terms.rb
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'EOF'
+          ## Install
+
+          ```sh
+          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | sh
+          # or
+          brew install VachaganGrigoryan/tap/terms
+          ```
+
+          Then add `eval "$(terms init zsh)"` (or `bash`) to your shell startup file for the short names (`tl`, `ts`, `tg`, `tj` ...).
+          Verify downloads against `SHA256SUMS`. Early release: see the README for the verification status of each command.
+
+          ## Changes
+          EOF
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "Terms $GITHUB_REF_NAME" \
+            --notes-file notes.md --generate-notes \
+            --verify-tag

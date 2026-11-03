@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  gate:
+    name: gate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # ubuntu-22.04 ships Git 2.34, so the Git integration is also exercised on an older Git.
+        os: [ubuntu-latest, ubuntu-22.04, macos-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal -c clippy -c rustfmt --no-self-update
+          rustup default stable
+          rustc --version
+      - name: Zsh for the shell tests
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y zsh
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked
+      - run: cargo build --release --locked
+      - name: Shell and terminal harnesses
+        run: |
+          python3 shell/tests/adapters.py
+          python3 shell/tests/history_adapters.py
+          python3 tests/pty_selector.py
+          python3 tests/store_fifo.py
+      - name: Release scripts
+        run: |
+          sh scripts/test-install.sh
+          sh scripts/test-formula.sh
+      - name: Shellcheck
+        if: runner.os == 'Linux'
+        run: shellcheck install.sh scripts/*.sh
+
+  msrv:
+    name: minimum Rust (1.85)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Rust 1.85
+        run: rustup toolchain install 1.85 --profile minimal --no-self-update
+      - run: cargo +1.85 build --locked
+      - run: cargo +1.85 test --locked
