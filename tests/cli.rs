@@ -13,7 +13,7 @@ fn public_cli_contract() {
         assert!(text.contains(if flag == "--help" {
             "Commands:"
         } else {
-            "0.1.0"
+            env!("CARGO_PKG_VERSION")
         }));
     }
     for arg in ["jump", "pick", "history", "--unknown", "unknown"] {
