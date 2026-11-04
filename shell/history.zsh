@@ -43,7 +43,15 @@ terms_history_enable() {
     [[ ${_TH_ENABLED:-0} != 1 ]] || return 0
     [[ -o interactive ]] || { print -u2 'terms history: capture requires an interactive shell'; return 2; }
     _TH_BIN=${TERMS_BIN:-${commands[terms]-}}
-    [[ $_TH_BIN = /* && -x $_TH_BIN ]] || return 2
+    [[ -n $_TH_BIN ]] || _TH_BIN=$(whence -p terms 2>/dev/null)
+    if [[ $_TH_BIN != /* || ! -x $_TH_BIN ]]; then
+        if [[ -n ${TERMS_BIN-} ]]; then
+            print -u2 -r -- "terms history: TERMS_BIN=${(q)TERMS_BIN} is not an absolute path to an executable; fix it, or run: unset TERMS_BIN"
+        else
+            print -u2 'terms history: cannot find terms on PATH; set TERMS_BIN to its absolute path'
+        fi
+        return 2
+    fi
     # A readonly history target cannot be disabled safely.
     [[ ${parameters[HISTFILE]-} != *readonly* ]] || { print -u2 'terms history: readonly HISTFILE'; return 2; }
     local session

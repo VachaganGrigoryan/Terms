@@ -70,7 +70,15 @@ terms_enable() {
     [[ -z $requested || $requested = --track ]] || return 2
     if [[ ${_TERMS_ENABLED:-0} != 1 ]]; then
         _TERMS_BIN=${TERMS_BIN:-${commands[terms]-}}
-        [[ $_TERMS_BIN = /* && -x $_TERMS_BIN ]] || { print -u2 'terms: set TERMS_BIN to an absolute executable path'; return 2; }
+        [[ -n $_TERMS_BIN ]] || _TERMS_BIN=$(whence -p terms 2>/dev/null)
+        if [[ $_TERMS_BIN != /* || ! -x $_TERMS_BIN ]]; then
+            if [[ -n ${TERMS_BIN-} ]]; then
+                print -u2 -r -- "terms: TERMS_BIN=${(q)TERMS_BIN} is not an absolute path to an executable; fix it, or run: unset TERMS_BIN"
+            else
+                print -u2 'terms: cannot find terms on PATH; set TERMS_BIN to its absolute path'
+            fi
+            return 2
+        fi
         (( ${+functions[tj]} || ${+functions[tji]} )) && { print -u2 'terms: tj or tji already exists'; return 2; }
         tj() { _terms_jump no "$@"; }
         tji() { _terms_jump yes "$@"; }

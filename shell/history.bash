@@ -50,8 +50,14 @@ terms_history_enable() {
     case $(declare -p PROMPT_COMMAND 2>/dev/null) in 'declare -a'*) return 2;; esac
     case $(declare -p HISTFILE 2>/dev/null) in 'declare -r'*|'declare -'*r*' HISTFILE='*) return 2;; esac
     _TH_BIN=${TERMS_BIN:-$(type -P terms)}
-    case $_TH_BIN in /*) ;; *) return 2;; esac
-    [ -x "$_TH_BIN" ] || return 2
+    if [ "${_TH_BIN#/}" = "$_TH_BIN" ] || [ ! -x "$_TH_BIN" ]; then
+        if [ -n "${TERMS_BIN-}" ]; then
+            printf 'terms history: TERMS_BIN=%q is not an absolute path to an executable; fix it, or run: unset TERMS_BIN\n' "$TERMS_BIN" >&2
+        else
+            printf '%s\n' 'terms history: cannot find terms on PATH; set TERMS_BIN to its absolute path' >&2
+        fi
+        return 2
+    fi
     local session
     session=$(printf '%s\n' "$$" | "$_TH_BIN" history session-open) || return
     [[ $session =~ ^[0-9a-f]+$ ]] || return 2

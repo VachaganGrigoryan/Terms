@@ -74,3 +74,41 @@ for name in t tl ts tq tp th; do ! command -v "$name" >/dev/null 2>&1 || exit 28
             shell
             + ": decode, newline path, injection, cancellation, short names passed"
         )
+
+    # How a real user arrives: terms installed on PATH with no TERMS_BIN set, and a stale
+    # TERMS_BIN left over in the shell from an old manual setup.
+    pathbin = root / "pathbin"
+    pathbin.mkdir()
+    (pathbin / "terms").symlink_to(fake)
+    discover = (
+        'source "$TERMS_TEST_ADAPTER" || exit 10\n'
+        "terms_enable || exit 11\n"
+        '[ "$(tl --probe)" = ls-ok ] || exit 12\n'
+        "terms_disable\n"
+    )
+    stale = 'source "$TERMS_TEST_ADAPTER" || exit 10\nterms_enable\n'
+    for shell, adapter in [("/bin/bash", "terms.bash"), ("/bin/zsh", "terms.zsh")]:
+        base = {k: v for k, v in env.items() if k != "TERMS_BIN"}
+        base["TERMS_TEST_ADAPTER"] = str(project / "shell" / adapter)
+        base["PATH"] = f"{pathbin}:{os.environ['PATH']}"
+        found = subprocess.run(
+            [shell, "-c", discover],
+            env=base,
+            cwd=root,
+            capture_output=True,
+            check=False,
+        )
+        assert found.returncode == 0, (shell, found.returncode, found.stderr)
+        bad = subprocess.run(
+            [shell, "-c", stale],
+            env=dict(base, TERMS_BIN="target/release/terms"),
+            cwd=root,
+            capture_output=True,
+            check=False,
+        )
+        assert bad.returncode == 2, (shell, bad.returncode, bad.stderr)
+        assert b"TERMS_BIN" in bad.stderr and b"target/release/terms" in bad.stderr, (
+            shell,
+            bad.stderr,
+        )
+        print(shell + ": finds terms on PATH; a stale TERMS_BIN is named in the error")

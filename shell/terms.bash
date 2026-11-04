@@ -75,8 +75,14 @@ terms_enable() {
     [ "$requested" = '' ] || [ "$requested" = --track ] || return 2
     if [ "${_TERMS_ENABLED:-0}" != 1 ]; then
         _TERMS_BIN=${TERMS_BIN:-$(type -P terms)}
-        case $_TERMS_BIN in /*) ;; *) printf '%s\n' 'terms: set TERMS_BIN to an absolute executable path' >&2; return 2;; esac
-        [ -x "$_TERMS_BIN" ] || return 2
+        if [ "${_TERMS_BIN#/}" = "$_TERMS_BIN" ] || [ ! -x "$_TERMS_BIN" ]; then
+            if [ -n "${TERMS_BIN-}" ]; then
+                printf 'terms: TERMS_BIN=%q is not an absolute path to an executable; fix it, or run: unset TERMS_BIN\n' "$TERMS_BIN" >&2
+            else
+                printf '%s\n' 'terms: cannot find terms on PATH; set TERMS_BIN to its absolute path' >&2
+            fi
+            return 2
+        fi
         declare -F tj >/dev/null && { printf '%s\n' 'terms: tj already exists' >&2; return 2; }
         declare -F tji >/dev/null && { printf '%s\n' 'terms: tji already exists' >&2; return 2; }
         tj() { _terms_jump no "$@"; }
