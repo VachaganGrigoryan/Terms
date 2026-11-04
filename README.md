@@ -94,10 +94,20 @@ terms ls --tree --level 2              # Tree, with operand at depth zero
 terms ls --sort size --reverse         # Largest entries first
 terms ls --sort modified --reverse     # Newest entries first
 terms ls --color never /tmp            # Disable terminal styling
+terms ls --icons emoji                 # One-off icons: emoji | nerd | phosphor | none
+export TERMS_ICONS=emoji               # Default icons on interactive terminals (unset or none = off)
 terms ls -- ./-unusual-name            # Operand beginning with a dash
 ```
 
-Long output includes file type, octal permissions, numeric UID/GID, bytes, UTC timestamp, and name. Names are escaped for terminal safety; symlinks are displayed without following them. `--header` requires `--long`, and `--level` requires `--tree`. Grid layout, icons, and Git status are not implemented.
+Long output includes file type, octal permissions, numeric UID/GID, bytes, UTC timestamp, and name. Names are escaped for terminal safety; symlinks are displayed without following them. `--header` requires `--long`, and `--level` requires `--tree`. Icons are off by default. `--icons SET` always applies; `TERMS_ICONS=SET` is only a default and applies only when output is a terminal, so pipes and scripts stay clean. `--icons none` overrides the variable.
+
+| Set | Needs | Notes |
+|---|---|---|
+| `emoji` | nothing | Works in every terminal; two cells wide, so it looks largest. |
+| `nerd` | A Nerd Font, e.g. `brew install --cask font-jetbrains-mono-nerd-font`, selected as the terminal font | Choose "Nerd Font", not "Nerd Font Mono", for bigger icons. |
+| `phosphor` | `Phosphor.ttf` from `@phosphor-icons/web` (`src/regular`) as a fallback font | kitty: `symbol_map U+E000-U+EDFF Phosphor` and `narrow_symbols U+E000-U+EDFF 2`. Apple Terminal has no fallback setting and picks wrong glyphs, so use `emoji` or `nerd` there. |
+
+Font glyphs are one cell wide; only emoji get two. Grid layout and Git status are not implemented.
 
 ## help — original offline command examples
 

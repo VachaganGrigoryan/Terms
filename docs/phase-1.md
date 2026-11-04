@@ -12,7 +12,7 @@ This is read-only processing, not a filesystem sandbox. Path-based standard-libr
 
 ## Listing
 
-`terms ls [--all] [--long] [--tree] [--level N] [--sort name|size|modified] [--reverse] [--header] [--color auto|never|always] [--] [PATH...]`
+`terms ls [--all] [--long] [--tree] [--level N] [--sort name|size|modified] [--reverse] [--header] [--color auto|never|always] [--icons none|emoji|nerd|phosphor] [--] [PATH...]`
 
 Default is the current directory, one entry per line, hidden names excluded. Explicit hidden operands are still displayed. Names are ordered by raw bytes; size and modified sorts ascend, with name-byte ties (timestamp sorting retains nanosecond precision). Reverse reverses the entire sorted sequence. Operands retain argument order. Multiple non-tree directory operands have escaped path headings.
 
@@ -20,7 +20,7 @@ Long columns are type, four-digit octal permissions, numeric UID/GID, byte size,
 
 Symlinks, including broken links and directory-link operands, are displayed with their escaped target and never intentionally recursed into. Special files are shown from metadata only, never opened. Continue after individual operand/display errors, return 2 and retain at most 64 diagnostics plus an omission notice. Writer failure aborts immediately. A single directory is bounded to one million entries and 64 MiB of raw filename bytes; tree recursion is bounded to 256. Metadata-read failure stops that directory rather than silently omitting entries.
 
-Auto color requires a terminal, `TERM` present and not `dumb`, and absent `NO_COLOR`. Explicit always/never overrides environment. Directories are blue and symlinks cyan. Grid, icons, directory grouping, hyperlinks, themes and Git status are deferred. Phosphor's SVG package is not a terminal glyph font and is not added as a dependency.
+Auto color requires a terminal, `TERM` present and not `dumb`, and absent `NO_COLOR`. Explicit always/never overrides environment. Directories are blue and symlinks cyan. `--icons none|emoji|nerd|phosphor` (default none) prefixes each name with a glyph chosen by file type, well-known name (Dockerfile, lockfiles, README and similar), lowercase extension (about 70 kinds: languages, images, audio/video, archives, documents, fonts, binaries and more), then dotfile (config) and executable bit; anything else gets the plain file icon. Names and metadata only; files are never opened. An explicit flag always applies. The `TERMS_ICONS` environment variable takes the same set names as a default, but applies only when stdout is a terminal and `TERM` is not `dumb`; unset, empty, `none` or unknown values mean no icons and never cause an error. Emoji are single-codepoint wide characters and need no font. Phosphor (regular, web 2.1.1) and Nerd Font (v3.4.0 glyphnames) use private-use codepoints and need that font installed, otherwise replacement boxes appear. No dependency is added. Grid, directory grouping, hyperlinks, themes and Git status are deferred.
 
 ## Offline help
 

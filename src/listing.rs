@@ -6,7 +6,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::{Path, PathBuf};
 
-const HELP: &str = "Usage: terms ls [--all] [--long] [--tree] [--level N] [--sort name|size|modified] [--reverse] [--header] [--color auto|never|always] [--] [PATH...]\nOne entry per line; symlinks are displayed, never intentionally followed.\nLong columns: TYPE MODE UID GID BYTES MODIFIED NAME\n";
+const HELP: &str = "Usage: terms ls [--all] [--long] [--tree] [--level N] [--sort name|size|modified] [--reverse] [--header] [--color auto|never|always] [--icons none|emoji|nerd|phosphor] [--] [PATH...]\nOne entry per line; symlinks are displayed, never intentionally followed.\nIcons are off by default. emoji needs no font; nerd and phosphor need that font installed.\nTERMS_ICONS=<set> enables icons on terminals only; --icons overrides it.\nLong columns: TYPE MODE UID GID BYTES MODIFIED NAME\n";
 const MAX_ENTRIES: usize = 1_000_000;
 const MAX_NAMES: usize = 64 * 1024 * 1024;
 
@@ -20,6 +20,7 @@ struct Options {
     reverse: bool,
     header: bool,
     color: bool,
+    icons: Option<IconSet>,
     paths: Vec<PathBuf>,
 }
 #[derive(Default)]
@@ -121,13 +122,13 @@ fn path_error(path: &Path, error: &std::io::Error) -> String {
 }
 fn parse(args: &[OsString], terminal: bool) -> Result<Options, String> {
     let mut options = Options {
-        color: terminal
-            && std::env::var_os("NO_COLOR").is_none()
-            && std::env::var_os("TERM").is_some_and(|v| v != "dumb"),
+        color: false,
         ..Options::default()
     };
     let mut end = false;
     let mut pos = 0;
+    let mut color = None;
+    let mut icons = None;
     while pos < args.len() {
         let arg = &args[pos];
         if !end && arg == "--" {
@@ -139,7 +140,7 @@ fn parse(args: &[OsString], terminal: bool) -> Result<Options, String> {
                 Some("--tree") => options.tree = true,
                 Some("--reverse") => options.reverse = true,
                 Some("--header") => options.header = true,
-                Some(flag @ ("--level" | "--sort" | "--color")) => {
+                Some(flag @ ("--level" | "--sort" | "--color" | "--icons")) => {
                     pos += 1;
                     let value = args
                         .get(pos)
@@ -163,17 +164,20 @@ fn parse(args: &[OsString], terminal: bool) -> Result<Options, String> {
                                 _ => return Err("--sort requires name, size, or modified".into()),
                             }
                         }
+                        "--icons" => {
+                            icons = Some(
+                                parse_icons(value)
+                                    .ok_or("--icons requires none, emoji, nerd, or phosphor")?,
+                            )
+                        }
                         _ => {
-                            options.color = match value {
-                                "auto" => {
-                                    terminal
-                                        && std::env::var_os("NO_COLOR").is_none()
-                                        && std::env::var_os("TERM").is_some_and(|v| v != "dumb")
-                                }
+                            let setting = match value {
+                                "auto" => styled(terminal),
                                 "always" => true,
                                 "never" => false,
                                 _ => return Err("--color requires auto, never, or always".into()),
-                            }
+                            };
+                            color = Some(setting);
                         }
                     }
                 }
@@ -184,6 +188,16 @@ fn parse(args: &[OsString], terminal: bool) -> Result<Options, String> {
         }
         pos += 1;
     }
+    options.color = color.unwrap_or_else(|| styled(terminal));
+    // TERMS_ICONS is only a default for interactive terminals; an explicit --icons wins everywhere.
+    options.icons = icons.unwrap_or_else(|| {
+        let capable = terminal && std::env::var_os("TERM").is_some_and(|v| v != "dumb");
+        std::env::var("TERMS_ICONS")
+            .ok()
+            .and_then(|v| parse_icons(&v))
+            .flatten()
+            .filter(|_| capable)
+    });
     if options.header && !options.long {
         return Err("--header requires --long".into());
     }
@@ -194,6 +208,338 @@ fn parse(args: &[OsString], terminal: bool) -> Result<Options, String> {
         options.paths.push(PathBuf::from("."));
     }
     Ok(options)
+}
+/// `Some(None)` is an explicit "none"; `None` is an unknown value.
+fn parse_icons(value: &str) -> Option<Option<IconSet>> {
+    match value {
+        "none" => Some(None),
+        "emoji" => Some(Some(IconSet::Emoji)),
+        "phosphor" => Some(Some(IconSet::Phosphor)),
+        "nerd" => Some(Some(IconSet::Nerd)),
+        _ => None,
+    }
+}
+/// Styling is allowed on a capable terminal unless `NO_COLOR` is set.
+fn styled(terminal: bool) -> bool {
+    terminal
+        && std::env::var_os("NO_COLOR").is_none()
+        && std::env::var_os("TERM").is_some_and(|v| v != "dumb")
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Icon {
+    Folder,
+    Git,
+    Link,
+    Pipe,
+    Socket,
+    Device,
+    Unknown,
+    Package,
+    Config,
+    Book,
+    Rust,
+    Python,
+    Js,
+    Ts,
+    Html,
+    Css,
+    Markdown,
+    Csv,
+    Sql,
+    C,
+    Cpp,
+    Data,
+    Shell,
+    Code,
+    Image,
+    Video,
+    Audio,
+    Zip,
+    Archive,
+    Pdf,
+    Word,
+    Excel,
+    Slides,
+    Text,
+    Database,
+    Key,
+    Lock,
+    File,
+    Go,
+    Java,
+    Ruby,
+    Php,
+    Swift,
+    Kotlin,
+    Lua,
+    CSharp,
+    Vue,
+    Jsx,
+    Tsx,
+    Svelte,
+    Dart,
+    Scala,
+    Haskell,
+    Elixir,
+    Zig,
+    Nix,
+    Perl,
+    R,
+    Docker,
+    Terraform,
+    WinScript,
+    Svg,
+    Xml,
+    Font,
+    Binary,
+    Diff,
+    Subtitle,
+    Notebook,
+    Disc,
+    Cert,
+    Calendar,
+    Contact,
+    LockFile,
+}
+#[derive(Clone, Copy)]
+enum IconSet {
+    Emoji,
+    Phosphor,
+    Nerd,
+}
+/// (emoji, Phosphor regular web 2.1.1, Nerd Font v3.4.0 glyphnames) per kind.
+fn glyph(icon: Icon, set: IconSet) -> &'static str {
+    let (emoji, phosphor, nerd) = match icon {
+        Icon::Folder => ("📁", "\u{e24a}", "\u{f07b}"),
+        Icon::Git => ("🌱", "\u{e278}", "\u{e702}"),
+        Icon::Link => ("🔗", "\u{e2e2}", "\u{f0c1}"),
+        Icon::Pipe => ("🚰", "\u{ed86}", "\u{f07e5}"),
+        Icon::Socket => ("🔌", "\u{e946}", "\u{f06a5}"),
+        Icon::Device => ("💽", "\u{e29e}", "\u{f02ca}"),
+        Icon::Unknown => ("❓", "\u{e3e8}", "\u{f128}"),
+        Icon::Package => ("📦", "\u{e390}", "\u{f03d6}"),
+        Icon::Config => ("🔧", "\u{e270}", "\u{f013}"),
+        Icon::Book => ("📖", "\u{e0e6}", "\u{f02d}"),
+        Icon::Rust => ("🦀", "\u{eb28}", "\u{e7a8}"),
+        Icon::Python => ("🐍", "\u{eb2c}", "\u{e73c}"),
+        Icon::Js => ("🟨", "\u{eb24}", "\u{e781}"),
+        Icon::Ts => ("🟦", "\u{eb26}", "\u{e8ca}"),
+        Icon::Html => ("🌐", "\u{eb38}", "\u{e736}"),
+        Icon::Css => ("🎨", "\u{eb34}", "\u{e749}"),
+        Icon::Markdown => ("📝", "\u{ed50}", "\u{e73e}"),
+        Icon::Csv => ("📊", "\u{eb1c}", "\u{e64a}"),
+        Icon::Sql => ("💾", "\u{ed4e}", "\u{f1c0}"),
+        Icon::C => ("🔷", "\u{eb32}", "\u{e61e}"),
+        Icon::Cpp => ("🔶", "\u{eb2e}", "\u{e61d}"),
+        Icon::Data => ("🧾", "\u{e860}", "\u{e60b}"),
+        Icon::Shell => ("🐚", "\u{eae8}", "\u{e795}"),
+        Icon::Code => ("💻", "\u{e914}", "\u{f121}"),
+        Icon::Image => ("📷", "\u{ea24}", "\u{f1c5}"),
+        Icon::Video => ("🎬", "\u{ea22}", "\u{f1c8}"),
+        Icon::Audio => ("🎵", "\u{ea20}", "\u{f1c7}"),
+        Icon::Zip => ("🤐", "\u{e958}", "\u{f1c6}"),
+        Icon::Archive => ("🧳", "\u{eb2a}", "\u{f1c6}"),
+        Icon::Pdf => ("📕", "\u{e702}", "\u{f1c1}"),
+        Icon::Word => ("📘", "\u{eb1e}", "\u{f1c2}"),
+        Icon::Excel => ("📗", "\u{eb22}", "\u{f1c3}"),
+        Icon::Slides => ("📙", "\u{eb20}", "\u{f1c4}"),
+        Icon::Text => ("📃", "\u{e23a}", "\u{f15c}"),
+        Icon::Database => ("📀", "\u{e1de}", "\u{f1c0}"),
+        Icon::Key => ("🔑", "\u{e2d6}", "\u{f084}"),
+        Icon::Lock => ("🔒", "\u{e2fe}", "\u{f023}"),
+        Icon::File => ("📄", "\u{e230}", "\u{f15b}"),
+        Icon::Go => ("🐹", "\u{e914}", "\u{e724}"),
+        Icon::Java => ("☕", "\u{e1c2}", "\u{e738}"),
+        Icon::Ruby => ("💎", "\u{e1ec}", "\u{e739}"),
+        Icon::Php => ("🐘", "\u{e914}", "\u{e73d}"),
+        Icon::Swift => ("🐦", "\u{e914}", "\u{e755}"),
+        Icon::Kotlin => ("🟪", "\u{e914}", "\u{e634}"),
+        Icon::Lua => ("🌙", "\u{e914}", "\u{e620}"),
+        Icon::CSharp => ("🟩", "\u{eb30}", "\u{e648}"),
+        Icon::Vue => ("💚", "\u{eb3e}", "\u{e6a0}"),
+        Icon::Jsx => ("🔵", "\u{eb3a}", "\u{e7ba}"),
+        Icon::Tsx => ("🟦", "\u{eb3c}", "\u{e7ba}"),
+        Icon::Svelte => ("🧡", "\u{e914}", "\u{e697}"),
+        Icon::Dart => ("🎯", "\u{e914}", "\u{e798}"),
+        Icon::Scala => ("🔺", "\u{e914}", "\u{e737}"),
+        Icon::Haskell => ("🟣", "\u{ebe4}", "\u{e777}"),
+        Icon::Elixir => ("💧", "\u{e914}", "\u{e62d}"),
+        Icon::Zig => ("⚡", "\u{e2de}", "\u{e6a9}"),
+        Icon::Nix => ("🧊", "\u{e914}", "\u{f313}"),
+        Icon::Perl => ("🐪", "\u{e914}", "\u{e769}"),
+        Icon::R => ("📈", "\u{e914}", "\u{e68a}"),
+        Icon::Docker => ("🐳", "\u{e1da}", "\u{e7b0}"),
+        Icon::Terraform => ("🌍", "\u{e95e}", "\u{e69a}"),
+        Icon::WinScript => ("🪟", "\u{e692}", "\u{e683}"),
+        Icon::Svg => ("📐", "\u{ed08}", "\u{f1c5}"),
+        Icon::Xml => ("🧩", "\u{e862}", "\u{e619}"),
+        Icon::Font => ("🔤", "\u{e6ee}", "\u{f031}"),
+        Icon::Binary => ("🧱", "\u{ee60}", "\u{f471}"),
+        Icon::Diff => ("🩹", "\u{e27c}", "\u{f440}"),
+        Icon::Subtitle => ("💬", "\u{e1a8}", "\u{f0a16}"),
+        Icon::Notebook => ("📓", "\u{e34e}", "\u{f082e}"),
+        Icon::Disc => ("💿", "\u{e564}", "\u{f05ee}"),
+        Icon::Cert => ("📜", "\u{e766}", "\u{f0a3}"),
+        Icon::Calendar => ("📅", "\u{e108}", "\u{f00ed}"),
+        Icon::Contact => ("📇", "\u{e6f8}", "\u{f06cb}"),
+        Icon::LockFile => ("🔐", "\u{e95c}", "\u{f023}"),
+    };
+    match set {
+        IconSet::Emoji => emoji,
+        IconSet::Phosphor => phosphor,
+        IconSet::Nerd => nerd,
+    }
+}
+fn by_name(name: &[u8]) -> Option<Icon> {
+    Some(match name {
+        b"Dockerfile"
+        | b"Containerfile"
+        | b"docker-compose.yml"
+        | b"docker-compose.yaml"
+        | b"compose.yml"
+        | b"compose.yaml" => Icon::Docker,
+        b".gitignore" | b".gitattributes" | b".gitmodules" | b".mailmap" => Icon::Git,
+        b"package-lock.json" | b"pnpm-lock.yaml" => Icon::LockFile,
+        b"Makefile" | b"GNUmakefile" | b"CMakeLists.txt" | b"justfile" | b"Rakefile"
+        | b"Gemfile" | b"go.mod" | b"go.sum" => Icon::Config,
+        b"Cargo.toml" | b"package.json" | b"pyproject.toml" => Icon::Package,
+        _ if [
+            &b"LICENSE"[..],
+            b"COPYING",
+            b"README",
+            b"CHANGELOG",
+            b"AUTHORS",
+            b"CONTRIBUTING",
+        ]
+        .iter()
+        .any(|p| name.starts_with(p)) =>
+        {
+            Icon::Book
+        }
+        _ if name == b".env" || name.starts_with(b".env.") => Icon::Key,
+        _ => return None,
+    })
+}
+fn by_extension(extension: &[u8]) -> Option<Icon> {
+    Some(match extension {
+        b"rs" => Icon::Rust,
+        b"py" | b"pyi" | b"pyw" => Icon::Python,
+        b"js" | b"mjs" | b"cjs" => Icon::Js,
+        b"ts" | b"mts" | b"cts" => Icon::Ts,
+        b"jsx" => Icon::Jsx,
+        b"tsx" => Icon::Tsx,
+        b"html" | b"htm" | b"xhtml" => Icon::Html,
+        b"css" | b"scss" | b"sass" | b"less" | b"styl" => Icon::Css,
+        b"md" | b"mdx" | b"markdown" | b"rst" | b"adoc" | b"org" => Icon::Markdown,
+        b"csv" | b"tsv" => Icon::Csv,
+        b"sql" => Icon::Sql,
+        b"c" | b"h" => Icon::C,
+        b"cpp" | b"cc" | b"cxx" | b"hpp" | b"hh" | b"hxx" => Icon::Cpp,
+        b"json" | b"jsonc" | b"json5" | b"jsonl" | b"ndjson" | b"yaml" | b"yml" | b"toml"
+        | b"msgpack" | b"map" => Icon::Data,
+        b"xml" | b"xsd" | b"xsl" | b"plist" => Icon::Xml,
+        b"svg" => Icon::Svg,
+        b"sh" | b"bash" | b"zsh" | b"fish" | b"ksh" | b"csh" | b"nu" => Icon::Shell,
+        b"bat" | b"cmd" | b"ps1" | b"psm1" => Icon::WinScript,
+        b"go" => Icon::Go,
+        b"java" | b"gradle" => Icon::Java,
+        b"rb" | b"erb" | b"gemspec" | b"rake" => Icon::Ruby,
+        b"php" => Icon::Php,
+        b"swift" => Icon::Swift,
+        b"kt" | b"kts" => Icon::Kotlin,
+        b"lua" => Icon::Lua,
+        b"cs" | b"csx" => Icon::CSharp,
+        b"vue" => Icon::Vue,
+        b"svelte" => Icon::Svelte,
+        b"dart" => Icon::Dart,
+        b"scala" | b"sc" => Icon::Scala,
+        b"hs" | b"lhs" => Icon::Haskell,
+        b"ex" | b"exs" | b"heex" => Icon::Elixir,
+        b"zig" => Icon::Zig,
+        b"nix" => Icon::Nix,
+        b"pl" | b"pm" => Icon::Perl,
+        b"r" | b"rmd" => Icon::R,
+        b"tf" | b"tfvars" | b"hcl" => Icon::Terraform,
+        b"m" | b"mm" | b"ml" | b"clj" | b"erl" | b"jl" | b"vb" | b"asm" | b"s" | b"f90"
+        | b"proto" | b"graphql" | b"gql" | b"cmake" | b"mk" | b"tpl" | b"j2" | b"hbs" | b"ejs"
+        | b"tape" | b"slint" | b"sol" | b"el" | b"lisp" | b"groovy" | b"tcl" | b"awk" | b"vim" => {
+            Icon::Code
+        }
+        b"png" | b"jpg" | b"jpeg" | b"gif" | b"webp" | b"ico" | b"bmp" | b"tif" | b"tiff"
+        | b"heic" | b"heif" | b"avif" | b"psd" | b"ai" | b"xcf" | b"raw" | b"cr2" | b"nef"
+        | b"dng" | b"sketch" | b"fig" | b"icns" | b"xwd" | b"rgba" => Icon::Image,
+        b"mp4" | b"mov" | b"mkv" | b"webm" | b"avi" | b"wmv" | b"flv" | b"m4v" | b"mpg"
+        | b"mpeg" | b"3gp" => Icon::Video,
+        b"mp3" | b"wav" | b"flac" | b"ogg" | b"m4a" | b"aac" | b"aiff" | b"aif" | b"opus"
+        | b"wma" | b"mid" | b"midi" | b"pcm" | b"m3u" | b"m3u8" => Icon::Audio,
+        b"zip" => Icon::Zip,
+        b"tar" | b"gz" | b"tgz" | b"xz" | b"bz2" | b"7z" | b"zst" | b"txz" | b"tbz2" | b"rar"
+        | b"lz4" | b"lzma" | b"cab" | b"z" => Icon::Archive,
+        b"deb" | b"rpm" | b"apk" | b"whl" | b"gem" | b"crate" | b"jar" | b"war" | b"nupkg"
+        | b"pkg" | b"msi" | b"appimage" | b"snap" => Icon::Package,
+        b"pdf" => Icon::Pdf,
+        b"doc" | b"docx" | b"odt" | b"rtf" | b"pages" => Icon::Word,
+        b"xls" | b"xlsx" | b"ods" | b"numbers" => Icon::Excel,
+        b"ppt" | b"pptx" | b"odp" | b"key" => Icon::Slides,
+        b"txt" | b"log" | b"text" | b"out" => Icon::Text,
+        b"epub" | b"mobi" | b"azw3" => Icon::Book,
+        b"db" | b"sqlite" | b"sqlite3" | b"mdb" | b"parquet" => Icon::Database,
+        b"ini" | b"cfg" | b"conf" | b"config" | b"properties" | b"editorconfig" | b"iml"
+        | b"example" | b"sample" | b"eslintrc" | b"npmrc" | b"nvmrc" => Icon::Config,
+        b"pem" | b"pub" | b"asc" | b"env" | b"keystore" | b"sig" => Icon::Key,
+        b"gpg" | b"age" | b"kdbx" => Icon::Lock,
+        b"lock" => Icon::LockFile,
+        b"so" | b"dylib" | b"a" | b"o" | b"obj" | b"lib" | b"dll" | b"exe" | b"bin" | b"pyc"
+        | b"pyo" | b"class" | b"wasm" | b"dat" | b"pth" | b"rkyv" | b"cache" => Icon::Binary,
+        b"diff" | b"patch" | b"rej" => Icon::Diff,
+        b"srt" | b"vtt" | b"ass" | b"ssa" | b"sub" => Icon::Subtitle,
+        b"ipynb" => Icon::Notebook,
+        b"iso" | b"dmg" | b"img" | b"vhd" | b"vmdk" | b"qcow2" => Icon::Disc,
+        b"ttf" | b"otf" | b"woff" | b"woff2" | b"eot" => Icon::Font,
+        b"crt" | b"cer" | b"der" | b"p12" | b"pfx" | b"csr" => Icon::Cert,
+        b"ics" => Icon::Calendar,
+        b"vcf" => Icon::Contact,
+        _ => return None,
+    })
+}
+/// Pick the icon kind from metadata and name only; files are never opened.
+fn classify(entry: &Entry) -> Icon {
+    let file_type = entry.metadata.file_type();
+    let name = entry.name.as_bytes();
+    if file_type.is_dir() {
+        return match name {
+            b".git" | b".github" => Icon::Git,
+            b"node_modules" => Icon::Package,
+            _ => Icon::Folder,
+        };
+    }
+    if file_type.is_symlink() {
+        return Icon::Link;
+    }
+    if file_type.is_fifo() {
+        return Icon::Pipe;
+    }
+    if file_type.is_socket() {
+        return Icon::Socket;
+    }
+    if file_type.is_block_device() || file_type.is_char_device() {
+        return Icon::Device;
+    }
+    if !file_type.is_file() {
+        return Icon::Unknown;
+    }
+    by_name(name)
+        .or_else(|| {
+            let extension = Path::new(&entry.name).extension()?;
+            by_extension(&extension.as_bytes().to_ascii_lowercase())
+        })
+        .unwrap_or(if name.starts_with(b".") {
+            Icon::Config
+        } else if entry.metadata.mode() & 0o111 != 0 {
+            Icon::Shell
+        } else {
+            Icon::File
+        })
 }
 fn entries(path: &Path, options: &Options) -> Result<Vec<Entry>, String> {
     let iterator = fs::read_dir(path).map_err(|error| path_error(path, &error))?;
@@ -309,6 +655,10 @@ fn show(entry: &Entry, prefix: &str, options: &Options, out: &mut dyn Write) -> 
         ));
     }
     line.push_str(prefix);
+    if let Some(set) = options.icons {
+        line.push_str(glyph(classify(entry), set));
+        line.push(' ');
+    }
     if options.color {
         line.push_str(if file_type.is_dir() {
             "\x1b[34m"
@@ -501,6 +851,10 @@ mod tests {
             vec!["--level", "1"],
             vec!["--tree", "--level", "257"],
             vec!["--sort", "bad"],
+            vec!["--icons"],
+            vec!["--icons", "bad"],
+            vec!["--icons", "always"],
+            vec!["--icon-set", "nerd"],
         ] {
             assert!(
                 execute(
@@ -511,5 +865,104 @@ mod tests {
                 .is_err()
             );
         }
+    }
+    #[test]
+    fn icons_by_type_and_name() {
+        use std::os::unix::fs::{PermissionsExt, symlink};
+        let root = std::env::temp_dir().join(format!("terms-icons-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join(".git")).unwrap();
+        fs::create_dir(root.join("d")).unwrap();
+        for f in ["x.rs", "X.PNG", "Cargo.toml", "run", "o.zzz"] {
+            fs::write(root.join(f), b"").unwrap();
+        }
+        fs::set_permissions(root.join("run"), fs::Permissions::from_mode(0o755)).unwrap();
+        symlink("d", root.join("l")).unwrap();
+        let get = |n: &str| {
+            let path = root.join(n);
+            glyph(
+                classify(&Entry {
+                    metadata: fs::symlink_metadata(&path).unwrap(),
+                    name: n.into(),
+                    path,
+                }),
+                IconSet::Phosphor,
+            )
+        };
+        assert_eq!(get("d"), "\u{e24a}");
+        assert_eq!(get(".git"), "\u{e278}");
+        assert_eq!(get("x.rs"), "\u{eb28}");
+        assert_eq!(get("X.PNG"), "\u{ea24}");
+        assert_eq!(get("Cargo.toml"), "\u{e390}");
+        assert_eq!(get("run"), "\u{eae8}");
+        assert_eq!(get("o.zzz"), "\u{e230}");
+        assert_eq!(get("l"), "\u{e2e2}");
+        let list = |extra: &[&str]| {
+            let mut args: Vec<OsString> = extra.iter().map(OsString::from).collect();
+            args.push(root.join("x.rs").into_os_string());
+            let mut out = Vec::new();
+            execute(&args, &mut out, false).unwrap();
+            String::from_utf8(out).unwrap()
+        };
+        assert!(list(&["--icons", "emoji"]).starts_with("🦀 "));
+        assert!(list(&["--icons", "phosphor"]).starts_with("\u{eb28} "));
+        assert!(list(&["--icons", "nerd"]).starts_with("\u{e7a8} "));
+        assert_eq!(
+            list(&[]).chars().count(),
+            list(&["--icons", "none"]).chars().count()
+        );
+        assert!(!list(&["--icons", "none"]).contains("🦀"));
+        fs::remove_dir_all(&root).unwrap();
+    }
+    #[test]
+    fn icon_kinds_by_name() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!("terms-kinds-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("node_modules")).unwrap();
+        let cases = [
+            ("a.go", Icon::Go),
+            ("A.JAVA", Icon::Java),
+            ("a.vue", Icon::Vue),
+            ("a.tsx", Icon::Tsx),
+            ("a.ttf", Icon::Font),
+            ("a.pyc", Icon::Binary),
+            ("a.srt", Icon::Subtitle),
+            ("a.patch", Icon::Diff),
+            ("a.ipynb", Icon::Notebook),
+            ("a.iso", Icon::Disc),
+            ("a.crt", Icon::Cert),
+            ("a.bat", Icon::WinScript),
+            ("a.svg", Icon::Svg),
+            ("a.xml", Icon::Xml),
+            ("a.tf", Icon::Terraform),
+            ("Dockerfile", Icon::Docker),
+            ("Cargo.lock", Icon::LockFile),
+            ("package-lock.json", Icon::LockFile),
+            (".env.local", Icon::Key),
+            (".gitignore", Icon::Git),
+            (".zshrc", Icon::Config),
+            ("README.md", Icon::Book),
+            ("Makefile", Icon::Config),
+            ("noext", Icon::File),
+            ("node_modules", Icon::Package),
+        ];
+        for (name, _) in cases {
+            if name != "node_modules" {
+                fs::write(root.join(name), b"").unwrap();
+            }
+        }
+        fs::write(root.join("tool"), b"").unwrap();
+        fs::set_permissions(root.join("tool"), fs::Permissions::from_mode(0o755)).unwrap();
+        for (name, expected) in cases.into_iter().chain([("tool", Icon::Shell)]) {
+            let path = root.join(name);
+            let entry = Entry {
+                metadata: fs::symlink_metadata(&path).unwrap(),
+                name: name.into(),
+                path,
+            };
+            assert_eq!(classify(&entry), expected, "{name}");
+        }
+        fs::remove_dir_all(&root).unwrap();
     }
 }
